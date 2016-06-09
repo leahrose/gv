@@ -1,0 +1,129 @@
+---
+title: "Exploring Treescape"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=7, fig.height=7, fig.path="figs/", cache=FALSE)
+options(digits = 4)
+```
+
+```{r libraries, include=FALSE}
+library("treescape")
+library("ape")
+library("adegenet")
+library("adegraphics")
+library("ggplot2")
+```
+
+```{r read.file}
+newick <- read.tree(file = "/Users/Leah/Desktop/gard_coreGenome_coreGenes_trees.newick", text = NULL, tree.names = NULL, skip = 0, comment.char = "#", keep.multi = TRUE)
+```
+
+##Finding Principal Components and Clusters
+```{r Finding Principal Components and Clusters}
+sub.newick <- treescape(newick,nf=8, return.tree.vectors = TRUE)
+pcPlot <- unlist(unlist(sub.newick$pco$eig))
+pc <- seq(1,275)
+df <- data.frame(cbind(pcPlot, pc))
+ggplot(df) + geom_point(aes(pc, pcPlot)) + scale_x_continuous(limits = c(1,25)) + scale_y_continuous(limits = c(1,150)) #The first point is not visible within the graph
+sum(pcPlot[1:8])/sum(pcPlot) #8 principal components retains 75% of the data
+
+#Deciding number of clusters
+library("factoextra")
+library("FactoMineR")
+res.pca <- PCA(sub.newick$pco$li) #Objective is to try to group principal components together in dimensions (variables) to create a hierarchy
+res.hcpc <- HCPC(res.pca, graph = T, nb.clust = -1) #nb.clust of -1 allows the program to cut clusters at the suggested value
+```
+
+##plotGroves: scatterplot of groups of trees
+```{r Principal Components is 8}
+#Metric considers the distance between the root and the MRCA (other metrics consider the distance between the tips and the MRCA).
+#Finding clusters-this program uses principal component analysis and hierarchial clustering in order to create clusters. The clustering methods use Euclidean distances between two vectors in order to find clusters between trees. Euclidean distances are based on branch lengths within the trees.
+sub.newick <- treescape(newick,nf=8, return.tree.vectors = TRUE) #nf specifies number of principal components to retain #($D) is the matrix of pairwise tree comparison and ($pco) is principal component analysis
+plotGroves(sub.newick$pco, lab.show=FALSE, lab.optim=FALSE)
+groves <- findGroves(sub.newick, lab.show=TRUE, nclust = 5) #number of principal components is 8, number of clusters is 5
+plotGroves(groves)
+summary(groves$groups)
+
+#The plot above uses principal components 1 and 2, the plot below uses the third principal component to examine more diversity #The xax and yax functions change which principal component to be used as the x axis/y axis. 
+plotGroves(groves, xax=1, yax=3)
+```
+
+##Experimenting with different amounts of clusters/principal components
+```{r Experimenting}
+#4 principal components, 5 clusters
+three.newick <- treescape(newick,nf=4)
+groves3 <- findGroves(three.newick, lab.show=TRUE, nclust = 5)
+plotGroves(groves3)
+
+#4 principal components, 7 clusters
+four.newick <- treescape(newick,nf=4)
+groves4 <- findGroves(four.newick, lab.show=TRUE, nclust = 7)
+plotGroves(groves4)
+
+#8 principal components, 5 clusters
+five.newick <- treescape(newick,nf=8)
+groves5 <- findGroves(five.newick, lab.show=TRUE, nclust = 5)
+plotGroves(groves5)
+
+#8 principal components, 7 clusters
+six.newick <- treescape(newick,nf=8)
+groves6 <- findGroves(six.newick, lab.show=TRUE, nclust = 7)
+plotGroves(groves6)
+
+#4 principal components, 4 clusters
+seven.newick <- treescape(newick,nf=4)
+groves7 <- findGroves(seven.newick, lab.show=TRUE, nclust = 4)
+plotGroves(groves7)
+
+#4 principal components, 3 clusters
+eight.newick <- treescape(newick,nf=4)
+groves8 <- findGroves(eight.newick, lab.show=TRUE, nclust = 3)
+plotGroves(groves8)
+
+#8 principal components, 4 clusters
+nine.newick <- treescape(newick,nf=8)
+groves9 <- findGroves(nine.newick, lab.show=TRUE, nclust = 4)
+plotGroves(groves9)
+
+#8 principal components, 3 clusters
+ten.newick <- treescape(newick,nf=8)
+groves10 <- findGroves(ten.newick, lab.show=TRUE, nclust = 3)
+plotGroves(groves10)
+```
+
+##Visualizing density of points
+```{r Visualizing Densities}
+s.kde2d(sub.newick$pco$li)
+s.density(sub.newick$pco$li, col=redpal(100), bandwidth=3) 
+
+#Alternative way of visualizing density using ggplot2
+gvplot <- ggplot(sub.newick$pco$li, aes(x=A1, y=A2))
+gvplot + geom_density2d(colour="gray80") + 
+geom_point(size=6, shape=1, colour="gray50") + 
+geom_point(size=6, alpha=0.2, colour="navy") +
+xlab("") + ylab("") + theme_bw(base_family="")
+```
+
+##Finding Median Trees (Finds the geometric median of a set of trees):
+```{r gvMedian}
+#Since the metric is simply the Euclidean distance between two vectors, the average vector can be calculated and then the tree with the vector closest to the average vector is called the "summary" tree.
+#Other methods of finding "median" trees are based on maximum clade credibility, which uses Bayesian inference of phylogeny
+summary <- medTree(newick)$trees[[1]]
+plot(summary,type="phylogram",edge.width=1, cex=.5) #use phylogram or unrooted
+
+res <- medTree(newick, groves$groups)
+names(res)
+med.trees <- lapply(res, function(e) ladderize(e$trees[[1]]))
+par(mfrow=c(2,3))
+for(i in 1:length(med.trees)) plot(med.trees[[i]], main=paste("cluster",i),cex=.6) #Returns the "central" tree found within each cluster
+#Cluster 4's central tree is the most different from the other clusters; cluster 4 is also the cluster that is not apart of the "dense" areas found within the section Visualizing Density
+```
+
+##multiDist:
+```{r Distances between Trees}
+#treeDist: finding distance between individual trees, have to upload these in a certain format
+#multiDist: comparison of a list of trees, comparable to the $D outut from treescape but may be better for larger datasets, produces a pairwise distance matrix
+m <- multiDist(newick, return.lambda.function = TRUE)
+m
+```
